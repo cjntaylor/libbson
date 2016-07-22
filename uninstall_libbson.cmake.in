@@ -1,0 +1,34 @@
+# Remove include folder
+message(STATUS "Removing @CMAKE_INSTALL_PREFIX@/@BSON_INCLUDE_INSTALL_PATH@")
+exec_program(
+  "@CMAKE_COMMAND@" ARGS "-E remove_directory \"@CMAKE_INSTALL_PREFIX@/@BSON_INCLUDE_INSTALL_PATH@\""
+  OUTPUT_VARIABLE rm_out
+  RETURN_VALUE rm_retval
+)
+if(NOT "${rm_retval}" STREQUAL 0)
+  message(FATAL_ERROR "Problem removing include folder: '@CMAKE_INSTALL_PREFIX@/@BSON_INCLUDE_INSTALL_PATH@'")
+endif()
+
+# Remove cmake definitions
+message(STATUS "Removing @CMAKE_INSTALL_PREFIX@/@BSON_PACKAGE_INSTALL_PATH@")
+exec_program(
+  "@CMAKE_COMMAND@" ARGS "-E remove_directory \"@CMAKE_INSTALL_PREFIX@/@BSON_PACKAGE_INSTALL_PATH@\""
+  OUTPUT_VARIABLE rm_out
+  RETURN_VALUE rm_retval
+)
+if(NOT "${rm_retval}" STREQUAL 0)
+  message(FATAL_ERROR "Problem removing cmake configuration: '@CMAKE_INSTALL_PREFIX@/@BSON_PACKAGE_INSTALL_PATH@'")
+endif()
+
+# Remove the Program Files folder under windows
+if(WIN32)
+  message(STATUS "Removing @CMAKE_INSTALL_PREFIX@/@BSON_INSTALL_PATH@")
+  exec_program(
+    "@CMAKE_COMMAND@" ARGS "-E remove_directory \"@CMAKE_INSTALL_PREFIX@/@BSON_INSTALL_PATH@\""
+    OUTPUT_VARIABLE rm_out
+    RETURN_VALUE rm_retval
+  )
+  if(NOT "${rm_retval}" STREQUAL 0)
+    message(FATAL_ERROR "Problem removing program files folder: '@CMAKE_INSTALL_PREFIX@/@BSON_INSTALL_PATH@'")
+  endif()
+endif()

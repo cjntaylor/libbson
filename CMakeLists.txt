@@ -1,331 +1,445 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.0)
 
-project (libbson)
+project(libbson)
 
-option(ENABLE_TESTS "Build libbson tests." ON)
-option(ENABLE_EXPERIMENTAL_FEATURES
-       "Experimental support for future BSON features."
-       OFF)
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build, \
+        options are: Debug Release RelWithDebInfo MinSizeRel." FORCE
+    )
+endif()
+
+set(BSON_LIBRARY_NAME bson)
+set(BSON_MAJOR_VERSION 1)
+set(BSON_MINOR_VERSION 3)
+set(BSON_MICRO_VERSION 5)
+set(BSON_VERSION 
+    ${BSON_MAJOR_VERSION}.${BSON_MINOR_VERSION}.${BSON_MICRO_VERSION}
+)
+set(BSON_VERSION_SOVER ${BSON_MAJOR_VERSION})
+
+option(BSON_TESTS_ENABLED "Enable testing" On)
+
+option(BSON_BUILD_STATIC "Build static library" On)
+option(BSON_BUILD_SHARED "Build shared library" On)
+if(APPLE)
+    option(BSON_BUILD_FRAMEWORK "Build OSX framework" On)
+endif()
+
+# Catch invalid configuration state (no library types)
+if(NOT BSON_BUILD_SHARED AND NOT BSON_BUILD_STATIC AND 
+   NOT BSON_BUILD_FRAMEWORK)
+    message(FATAL_ERROR "No library set to build")
+endif()
+
+# Add the local cmake folder to the module search path
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
+# Make sure we're building out of source
+include(EnsureOutOfSourceBuild)
+ensure_out_of_source_build("\
+    ${PROJECT_NAME} requires an out of source build. \
+    Please create a separate build directory and run \
+    'cmake /path/to/${PROJECT_NAME} [options]' there.\
+")
+
+set(BSON_API_VERSION 1.0)
 
 include(CheckFunctionExists)
 include(CheckIncludeFile)
 include(CheckStructHasMember)
 include(CheckSymbolExists)
 include(TestBigEndian)
-include(InstallRequiredSystemLibraries)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/build/cmake)
+test_big_endian(BSON_BIG_ENDIAN)
 
-# Set BSON_MAJOR_VERSION, BSON_MINOR_VERSION, etc.
-include(LoadVersion)
-LoadVersion(${PROJECT_SOURCE_DIR}/VERSION_CURRENT BSON)
-LoadVersion(${PROJECT_SOURCE_DIR}/VERSION_RELEASED BSON_RELEASED)
-
-message("Current version (from VERSION_CURRENT file): ${BSON_VERSION}")
-if (NOT ${BSON_VERSION} STREQUAL ${BSON_RELEASED_VERSION})
-   message("Previous release (from VERSION_RELEASED file): ${BSON_RELEASED_VERSION}")
-endif()
-
-set (SOURCE_DIR "${PROJECT_SOURCE_DIR}/")
-
-set (BSON_API_VERSION 1.0)
-
-set (CPACK_RESOURCE_FILE_LICENSE "${SOURCE_DIR}/COPYING")
-set (CPACK_PACKAGE_VERSION_MAJOR ${BSON_MAJOR_VERSION})
-set (CPACK_PACKAGE_VERSION_MINOR ${BSON_MINOR_VERSION})
-
-if (ENABLE_EXPERIMENTAL_FEATURES)
-   set (BSON_EXPERIMENTAL_FEATURES 1)
-else ()
-   set (BSON_EXPERIMENTAL_FEATURES 0)
-endif ()
-
-include (CPack)
-TEST_BIG_ENDIAN(BSON_BIG_ENDIAN)
-
-# These need proper checks like automake.
-set (BSON_PTHREAD_ONCE_INIT_NEEDS_BRACES 0)
-set (BSON_HAVE_DECIMAL128 0)
+set(BSON_EXPERIMENTAL_FEATURES 0)
+set(BSON_PTHREAD_ONCE_INIT_NEEDS_BRACES 0)
+set(BSON_HAVE_DECIMAL128 0)
 
 #librt needed on linux for clock_gettime
-find_library(RT_LIBRARY rt)
-if (RT_LIBRARY)
-   #set required libraries for CHECK_FUNCTION_EXISTS
-   set(CMAKE_REQUIRED_LIBRARIES ${RT_LIBRARY})
+find_package(RT)
+if(RT_FOUND)
+   #set required libraries for check_function_exists
+   set(CMAKE_REQUIRED_LIBRARIES ${RT_LIBRARIES})
 endif()
 
 # See https://public.kitware.com/Bug/view.php?id=15659
-CHECK_SYMBOL_EXISTS(snprintf stdio.h BSON_HAVE_SNPRINTF)
-if (NOT BSON_HAVE_SNPRINTF)
+check_symbol_exists(snprintf stdio.h BSON_HAVE_SNPRINTF)
+if(NOT BSON_HAVE_SNPRINTF)
   set(BSON_HAVE_SNPRINTF 0)
-else ()
+else()
   set(BSON_HAVE_SNPRINTF 1)
-endif ()
+endif()
 
-CHECK_FUNCTION_EXISTS(_set_output_format BSON_NEEDS_SET_OUTPUT_FORMAT)
-if (NOT BSON_NEEDS_SET_OUTPUT_FORMAT)
+check_function_exists(_set_output_format BSON_NEEDS_SET_OUTPUT_FORMAT)
+if(NOT BSON_NEEDS_SET_OUTPUT_FORMAT)
   set(BSON_NEEDS_SET_OUTPUT_FORMAT 0)
 endif ()
 
-CHECK_FUNCTION_EXISTS(reallocf BSON_HAVE_REALLOCF)
-if (NOT BSON_HAVE_REALLOCF)
+check_function_exists(reallocf BSON_HAVE_REALLOCF)
+if(NOT BSON_HAVE_REALLOCF)
   set(BSON_HAVE_REALLOCF 0)
-endif ()
+endif()
 
-CHECK_STRUCT_HAS_MEMBER("struct timespec" tv_sec time.h BSON_HAVE_TIMESPEC)
-if (NOT BSON_HAVE_TIMESPEC)
+check_struct_has_member("struct timespec" tv_sec time.h BSON_HAVE_TIMESPEC)
+if(NOT BSON_HAVE_TIMESPEC)
   message(STATUS "    no timespec struct")
   set(BSON_HAVE_TIMESPEC 0)
-else ()
+else()
   message(STATUS "    struct timespec found")
   set(BSON_HAVE_TIMESPEC 1)
-endif ()
+endif()
 
 if (MSVC)
-   set (BSON_OS 2)
-   set (BSON_HAVE_CLOCK_GETTIME 0)
-   set (BSON_HAVE_STDBOOL_H 0)
-   set (BSON_HAVE_STRNLEN 0)
-   set (BSON_EXTRA_ALIGN 1)
-   set (BSON_HAVE_SYSCALL_TID 0)
-else ()
-   find_package (Threads)
+   set(BSON_OS 2)
+   set(BSON_HAVE_CLOCK_GETTIME 0)
+   set(BSON_HAVE_STDBOOL_H 0)
+   set(BSON_HAVE_STRNLEN 0)
+   set(BSON_EXTRA_ALIGN 1)
+   set(BSON_HAVE_SYSCALL_TID 0)
 
-   set (BSON_OS 1)
-   CHECK_FUNCTION_EXISTS(clock_gettime BSON_HAVE_CLOCK_GETTIME)
-   if (NOT BSON_HAVE_CLOCK_GETTIME)
+   find_package(Ws2_32 REQUIRED)
+   list(APPEND BSON_LIBRARIES ${WS2_32_LIBRARIES})
+else()
+   find_package(Threads)
+   list(APPEND BSON_LIBRARIES ${CMAKE_THREAD_LIBS_INIT})
+
+   set(BSON_OS 1)
+   check_function_exists(clock_gettime BSON_HAVE_CLOCK_GETTIME)
+   if(NOT BSON_HAVE_CLOCK_GETTIME)
       set(BSON_HAVE_CLOCK_GETTIME 0)
-   endif ()
-   CHECK_FUNCTION_EXISTS(strnlen BSON_HAVE_STRNLEN)
-   if (NOT BSON_HAVE_STRNLEN)
+   endif()
+   check_function_exists(strnlen BSON_HAVE_STRNLEN)
+   if(NOT BSON_HAVE_STRNLEN)
       set(BSON_HAVE_STRNLEN 0)
-   endif ()
-   CHECK_INCLUDE_FILE(stdbool.h BSON_HAVE_STDBOOL_H)
-   if (NOT BSON_HAVE_STDBOOL_H)
+   endif()
+   check_include_file(stdbool.h BSON_HAVE_STDBOOL_H)
+   if(NOT BSON_HAVE_STDBOOL_H)
       set(BSON_HAVE_STDBOOL_H 0)
    endif ()
-   set (BSON_EXTRA_ALIGN 1)
-   CHECK_FUNCTION_EXISTS(syscall BSON_HAVE_SYSCALL_TID)
-   CHECK_INCLUDE_FILE(strings.h HAVE_STRINGS_H)
+   set(BSON_EXTRA_ALIGN 1)
+   check_function_exists(syscall BSON_HAVE_SYSCALL_TID)
+   check_include_file(strings.h HAVE_STRINGS_H)
 endif ()
 
-set (BSON_HAVE_ATOMIC_32_ADD_AND_FETCH 1)
-set (BSON_HAVE_ATOMIC_64_ADD_AND_FETCH 1)
+set(BSON_HAVE_ATOMIC_32_ADD_AND_FETCH 1)
+set(BSON_HAVE_ATOMIC_64_ADD_AND_FETCH 1)
 
-if (BSON_BIG_ENDIAN)
-   set (BSON_BYTE_ORDER 4321)
-else ()
-   set (BSON_BYTE_ORDER 1234)
-endif ()
-
-configure_file (
-   "${SOURCE_DIR}/src/bson/bson-config.h.in"
-   "${PROJECT_BINARY_DIR}/src/bson/bson-config.h"
-)
-
-configure_file (
-   "${SOURCE_DIR}/src/bson/bson-version.h.in"
-   "${PROJECT_BINARY_DIR}/src/bson/bson-version.h"
-)
-
-configure_file (
-   "${PROJECT_SOURCE_DIR}/build/cmake/bson/bson-stdint.h"
-   "${PROJECT_BINARY_DIR}/src/bson/bson-stdint.h"
-)
-
-include_directories("${PROJECT_BINARY_DIR}/src/bson")
-include_directories("${SOURCE_DIR}/src/bson")
-include_directories("${SOURCE_DIR}/src")
-
-if (APPLE)
-   cmake_policy(SET CMP0042 OLD)
-endif()
-
-set (SOURCES
-   ${SOURCE_DIR}/src/bson/bcon.c
-   ${SOURCE_DIR}/src/bson/bson.c
-   ${SOURCE_DIR}/src/bson/bson-atomic.c
-   ${SOURCE_DIR}/src/bson/bson-clock.c
-   ${SOURCE_DIR}/src/bson/bson-context.c
-   ${SOURCE_DIR}/src/bson/bson-error.c
-   ${SOURCE_DIR}/src/bson/bson-iso8601.c
-   ${SOURCE_DIR}/src/bson/bson-iter.c
-   ${SOURCE_DIR}/src/bson/bson-json.c
-   ${SOURCE_DIR}/src/bson/bson-keys.c
-   ${SOURCE_DIR}/src/bson/bson-md5.c
-   ${SOURCE_DIR}/src/bson/bson-memory.c
-   ${SOURCE_DIR}/src/bson/bson-oid.c
-   ${SOURCE_DIR}/src/bson/bson-reader.c
-   ${SOURCE_DIR}/src/bson/bson-string.c
-   ${SOURCE_DIR}/src/bson/bson-timegm.c
-   ${SOURCE_DIR}/src/bson/bson-utf8.c
-   ${SOURCE_DIR}/src/bson/bson-value.c
-   ${SOURCE_DIR}/src/bson/bson-version-functions.c
-   ${SOURCE_DIR}/src/bson/bson-writer.c
-   ${SOURCE_DIR}/src/yajl/yajl_alloc.c
-   ${SOURCE_DIR}/src/yajl/yajl_buf.c
-   ${SOURCE_DIR}/src/yajl/yajl.c
-   ${SOURCE_DIR}/src/yajl/yajl_encode.c
-   ${SOURCE_DIR}/src/yajl/yajl_gen.c
-   ${SOURCE_DIR}/src/yajl/yajl_lex.c
-   ${SOURCE_DIR}/src/yajl/yajl_parser.c
-   ${SOURCE_DIR}/src/yajl/yajl_tree.c
-   ${SOURCE_DIR}/src/yajl/yajl_version.c
-)
-
-if (ENABLE_EXPERIMENTAL_FEATURES)
-    set (SOURCES ${SOURCES} ${SOURCE_DIR}/src/bson/bson-decimal128.c)
-endif ()
-
-set (HEADERS
-   ${PROJECT_BINARY_DIR}/src/bson/bson-config.h
-   ${PROJECT_BINARY_DIR}/src/bson/bson-stdint.h
-   ${PROJECT_BINARY_DIR}/src/bson/bson-version.h
-   ${SOURCE_DIR}/src/bson/bcon.h
-   ${SOURCE_DIR}/src/bson/bson-atomic.h
-   ${SOURCE_DIR}/src/bson/bson-clock.h
-   ${SOURCE_DIR}/src/bson/bson-compat.h
-   ${SOURCE_DIR}/src/bson/bson-context.h
-   ${SOURCE_DIR}/src/bson/bson-endian.h
-   ${SOURCE_DIR}/src/bson/bson-error.h
-   ${SOURCE_DIR}/src/bson/bson.h
-   ${SOURCE_DIR}/src/bson/bson-iter.h
-   ${SOURCE_DIR}/src/bson/bson-json.h
-   ${SOURCE_DIR}/src/bson/bson-keys.h
-   ${SOURCE_DIR}/src/bson/bson-macros.h
-   ${SOURCE_DIR}/src/bson/bson-md5.h
-   ${SOURCE_DIR}/src/bson/bson-memory.h
-   ${SOURCE_DIR}/src/bson/bson-oid.h
-   ${SOURCE_DIR}/src/bson/bson-reader.h
-   ${SOURCE_DIR}/src/bson/bson-stdint-win32.h
-   ${SOURCE_DIR}/src/bson/bson-string.h
-   ${SOURCE_DIR}/src/bson/bson-types.h
-   ${SOURCE_DIR}/src/bson/bson-utf8.h
-   ${SOURCE_DIR}/src/bson/bson-value.h
-   ${SOURCE_DIR}/src/bson/bson-version-functions.h
-   ${SOURCE_DIR}/src/bson/bson-writer.h
-)
-
-if (ENABLE_EXPERIMENTAL_FEATURES)
-    set (HEADERS ${HEADERS} ${SOURCE_DIR}/src/bson/bson-decimal128.h)
-endif ()
-
-if (MSVC)
-   # Export the functions listed in a definitions file.
-   if (ENABLE_EXPERIMENTAL_FEATURES)
-      set (BSON_DEF_FILE
-           ${PROJECT_SOURCE_DIR}/build/cmake/libbson-experimental.def)
-   else ()
-       set (BSON_DEF_FILE
-            ${PROJECT_SOURCE_DIR}/build/cmake/libbson.def)
-   endif ()
-
-   set(BSON_SHARED_SOURCES ${SOURCES} ${BSON_DEF_FILE})
+if(BSON_BIG_ENDIAN)
+   set(BSON_BYTE_ORDER 4321)
 else()
-   set(BSON_SHARED_SOURCES ${SOURCES})
+   set(BSON_BYTE_ORDER 1234)
 endif()
 
-add_library(bson_shared SHARED ${BSON_SHARED_SOURCES} ${HEADERS})
-add_library(bson_static STATIC ${SOURCES} ${HEADERS})
+configure_file (
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/bson/bson-config.h.in
+   ${CMAKE_CURRENT_BINARY_DIR}/bson-config.h
+)
 
-set_target_properties(bson_shared PROPERTIES COMPILE_DEFINITIONS "BSON_COMPILATION")
-set_target_properties(bson_static PROPERTIES COMPILE_DEFINITIONS "BSON_COMPILATION")
+configure_file (
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/bson/bson-version.h.in
+   ${CMAKE_CURRENT_BINARY_DIR}/bson-version.h
+)
 
-set_target_properties(bson_shared PROPERTIES VERSION ${BSON_VERSION} SOVERSION ${BSON_MAJOR_VERSION})
-set_target_properties(bson_static PROPERTIES VERSION ${BSON_VERSION} SOVERSION ${BSON_MAJOR_VERSION})
+configure_file (
+   ${CMAKE_CURRENT_SOURCE_DIR}/build/cmake/bson/bson-stdint.h
+   ${CMAKE_CURRENT_BINARY_DIR}/bson-stdint.h
+)
 
-set_target_properties(bson_shared PROPERTIES OUTPUT_NAME "bson-${BSON_API_VERSION}" PREFIX "lib")
-set_target_properties(bson_static PROPERTIES OUTPUT_NAME "bson-static-${BSON_API_VERSION}")
+list(APPEND BSON_HEADERS
+    ${CMAKE_CURRENT_BINARY_DIR}/bson-config.h
+    ${CMAKE_CURRENT_BINARY_DIR}/bson-version.h
+    ${CMAKE_CURRENT_BINARY_DIR}/bson-stdint.h
+    src/bson/bcon.h
+    src/bson/bson-atomic.h
+    src/bson/bson-clock.h
+    src/bson/bson-compat.h
+    src/bson/bson-context.h
+    src/bson/bson-endian.h
+    src/bson/bson-error.h
+    src/bson/bson.h
+    src/bson/bson-iter.h
+    src/bson/bson-json.h
+    src/bson/bson-keys.h
+    src/bson/bson-macros.h
+    src/bson/bson-md5.h
+    src/bson/bson-memory.h
+    src/bson/bson-oid.h
+    src/bson/bson-reader.h
+    src/bson/bson-stdint-win32.h
+    src/bson/bson-string.h
+    src/bson/bson-types.h
+    src/bson/bson-utf8.h
+    src/bson/bson-value.h
+    src/bson/bson-version-functions.h
+    src/bson/bson-writer.h
+)
 
-if (RT_LIBRARY)
-    target_link_libraries (bson_shared ${RT_LIBRARY})
-    target_link_libraries (bson_static ${RT_LIBRARY})
+list(APPEND BSON_SOURCES
+    src/bson/bcon.c
+    src/bson/bson.c
+    src/bson/bson-atomic.c
+    src/bson/bson-clock.c
+    src/bson/bson-context.c
+    src/bson/bson-error.c
+    src/bson/bson-iso8601.c
+    src/bson/bson-iter.c
+    src/bson/bson-json.c
+    src/bson/bson-keys.c
+    src/bson/bson-md5.c
+    src/bson/bson-memory.c
+    src/bson/bson-oid.c
+    src/bson/bson-reader.c
+    src/bson/bson-string.c
+    src/bson/bson-timegm.c
+    src/bson/bson-utf8.c
+    src/bson/bson-value.c
+    src/bson/bson-version-functions.c
+    src/bson/bson-writer.c
+    src/yajl/yajl_alloc.c
+    src/yajl/yajl_buf.c
+    src/yajl/yajl.c
+    src/yajl/yajl_encode.c
+    src/yajl/yajl_gen.c
+    src/yajl/yajl_lex.c
+    src/yajl/yajl_parser.c
+    src/yajl/yajl_tree.c
+    src/yajl/yajl_version.c
+)
+
+if(WIN32)
+    list(APPEND BSON_SOURCES 
+        ${CMAKE_CURRENT_SOURCE_DIR}/build/cmake/libbson.def
+    )
 endif()
 
-if (UNIX)
-    target_link_libraries (bson_shared ${CMAKE_THREAD_LIBS_INIT})
-    target_link_libraries (bson_static ${CMAKE_THREAD_LIBS_INIT})
+list(APPEND BSON_INCLUDE
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/bson>
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+)
+
+list(APPEND BSON_DEFINES
+    PRIVATE BSON_COMPILATION
+    PRIVATE $<$<CONFIG:Debug>:DEBUG>
+    PRIVATE $<$<NOT:$<CONFIG:Debug>>:NDEBUG>
+)
+
+# Set the install path per platform
+if(WIN32)
+    # Use C:\Program Files\${PROJECT_NAME}\<version> under windows (since there
+    # isn't a common "lib" folder)
+    set(BSON_INSTALL_PATH ${PROJECT_NAME}/${BSON_VERSION})
+    set(BSON_LIBRARY_INSTALL_PATH ${BSON_INSTALL_PATH})
+    set(BSON_RUNTIME_INSTALL_PATH ${BSON_INSTALL_PATH})
+    set(BSON_INCLUDE_INSTALL_PATH ${BSON_INSTALL_PATH}/include)
+    set(BSON_PACKAGE_INSTALL_PATH cmake/${PROJECT_NAME})
 else()
-    target_link_libraries (bson_shared ws2_32)
-    target_link_libraries (bson_static ws2_32)
+    set(BSON_LIBRARY_INSTALL_PATH lib)
+    # Use library architecture if it is set (multiarch support)
+    if(CMAKE_LIBRARY_ARCHITECTURE)
+        set(BSON_LIBRARY_INSTALL_PATH
+            "${BSON_LIBRARY_INSTALL_PATH}/${CMAKE_LIBRARY_ARCHITECTURE}"
+        )
+    endif()
+    set(BSON_RUNTIME_INSTALL_PATH bin)
+    set(BSON_INCLUDE_INSTALL_PATH include/${PROJECT_NAME}-${BSON_VERSION})
+    set(BSON_PACKAGE_INSTALL_PATH 
+        ${BSON_LIBRARY_INSTALL_PATH}/cmake/${PROJECT_NAME}
+    )
 endif()
 
-if (ENABLE_TESTS)
+list(APPEND BSON_INCLUDE 
+    PUBLIC $<INSTALL_INTERFACE:${BSON_INCLUDE_INSTALL_PATH}>
+)
+
+# Generate output tree
+if(NOT CMAKE_OUTPUT_DIRECTORY)
+    set(CMAKE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endif()
+set(CMAKE_INCLUDE_OUTPUT_DIRECTORY 
+    ${CMAKE_OUTPUT_DIRECTORY}/${BSON_INCLUDE_INSTALL_PATH}
+)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY 
+    ${CMAKE_OUTPUT_DIRECTORY}/${BSON_LIBRARY_INSTALL_PATH}
+)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY 
+    ${CMAKE_OUTPUT_DIRECTORY}/${BSON_RUNTIME_INSTALL_PATH}
+)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY 
+    ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+)
+set(CMAKE_PACKAGE_OUTPUT_DIRECTORY 
+    ${CMAKE_OUTPUT_DIRECTORY}/${BSON_PACKAGE_INSTALL_PATH}
+)
+
+# Install public headers to the output tree
+file(INSTALL ${BSON_HEADERS} DESTINATION ${CMAKE_INCLUDE_OUTPUT_DIRECTORY})
+
+# Generate a shared library
+if(BSON_BUILD_SHARED)
+    add_library(${PROJECT_NAME}-shared SHARED 
+        ${BSON_HEADERS}
+        ${BSON_SOURCES}
+    )
+    # USING_BSON_SHARED here DEPENDS on the ordering of defines in uv.h
+    target_compile_definitions(${PROJECT_NAME}-shared ${BSON_DEFINES})
+    target_include_directories(${PROJECT_NAME}-shared ${BSON_INCLUDE})
+    target_link_libraries(${PROJECT_NAME}-shared ${BSON_LIBRARIES})
+    set_target_properties(${PROJECT_NAME}-shared PROPERTIES
+        OUTPUT_NAME ${BSON_LIBRARY_NAME}
+        LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+        LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+        LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+        LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO 
+            ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+        DEBUG_POSTFIX _d
+        VERSION ${BSON_VERSION}
+        SOVERSION ${BSON_VERSION_SOVER}
+        POSITION_INDEPENDENT_CODE True
+    )
+    list(APPEND BSON_EXPORT_TARGETS ${PROJECT_NAME}-shared)
+    if(NOT BSON_BUILT_LIBRARY)
+        set(BSON_BUILT_LIBRARY ${PROJECT_NAME}-shared)
+    endif()
+endif()
+
+# Generate an OSX framework
+if(BSON_BUILD_FRAMEWORK)
+    add_library(${PROJECT_NAME}-framework SHARED
+        ${BSON_HEADERS}
+        ${BSON_SOURCES}
+    )
+    target_compile_definitions(${PROJECT_NAME}-framework ${BSON_DEFINES})
+    target_include_directories(${PROJECT_NAME}-framework ${BSON_INCLUDE})
+    target_link_libraries(${PROJECT_NAME}-framework ${BSON_LIBRARIES})
+    set_target_properties(${PROJECT_NAME}-framework PROPERTIES
+        OUTPUT_NAME ${PROJECT_NAME}$<$<CONFIG:Debug>:_d>
+        LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+        LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+        LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+        LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO 
+            ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+        VERSION ${BSON_VERSION}
+        SOVERSION ${BSON_VERSION_SOVER}
+        POSITION_INDEPENDENT_CODE True
+        FRAMEWORK True
+        FRAMEWORK_VERSION ${BSON_VERSION}
+        PUBLIC_HEADER "${BSON_HEADERS}"
+    )
+    list(APPEND BSON_EXPORT_TARGETS_LOCAL ${PROJECT_NAME}-framework)
+endif()
+
+# Generate a static library
+if(BSON_BUILD_STATIC)
+    add_library(${PROJECT_NAME}-static STATIC
+        ${BSON_HEADERS}
+        ${BSON_SOURCES}
+    )
+    target_compile_definitions(${PROJECT_NAME}-static ${BSON_DEFINES})
+    target_include_directories(${PROJECT_NAME}-static ${BSON_INCLUDE})
+    target_link_libraries(${PROJECT_NAME}-static ${BSON_LIBRARIES})
+    set_target_properties(${PROJECT_NAME}-static PROPERTIES
+        OUTPUT_NAME ${BSON_LIBRARY_NAME}
+        ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
+        ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
+        ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
+        ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO 
+            ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
+        DEBUG_POSTFIX _d
+    )
+    list(APPEND BSON_EXPORT_TARGETS ${PROJECT_NAME}-static)
+    if(NOT BSON_BUILT_LIBRARY)
+        set(BSON_BUILT_LIBRARY ${PROJECT_NAME}-static)
+    endif()
+endif()
+
+# Include installed export targets in local targets
+list(APPEND BSON_EXPORT_TARGETS_LOCAL ${BSON_EXPORT_TARGETS})
+
+# Install uv libraries and headers
+install(TARGETS ${BSON_EXPORT_TARGETS}
+    EXPORT ${PROJECT_NAME}
+    LIBRARY DESTINATION ${BSON_LIBRARY_INSTALL_PATH}
+    ARCHIVE DESTINATION ${BSON_LIBRARY_INSTALL_PATH}
+)
+install(FILES ${BSON_HEADERS} DESTINATION ${BSON_INCLUDE_INSTALL_PATH})
+
+# Generate in-tree package configuration
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    ${CMAKE_PACKAGE_OUTPUT_DIRECTORY}/${PROJECT_NAME}ConfigVersion.cmake
+    VERSION ${BSON_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+export(TARGETS ${BSON_EXPORT_TARGETS_LOCAL}
+    FILE ${CMAKE_PACKAGE_OUTPUT_DIRECTORY}/${PROJECT_NAME}Config.cmake
+)
+
+# Generate installed package configuration
+install(
+    FILES ${CMAKE_PACKAGE_OUTPUT_DIRECTORY}/${PROJECT_NAME}ConfigVersion.cmake
+    DESTINATION ${BSON_PACKAGE_INSTALL_PATH}
+)
+install(EXPORT ${PROJECT_NAME} 
+    DESTINATION ${BSON_PACKAGE_INSTALL_PATH}
+    FILE ${PROJECT_NAME}Config.cmake
+)
+
+# Provide an uninstall target
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake
+    IMMEDIATE @ONLY
+)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/uninstall_libbson.cmake.in
+    ${CMAKE_OUTPUT_DIRECTORY}/uninstall/uninstall_libbson.cmake
+    IMMEDIATE @ONLY
+)
+add_custom_target(uninstall
+    COMMAND ${CMAKE_COMMAND}
+    ARGS -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake
+)
+
+if(BSON_TESTS_ENABLED)
     enable_testing()
 
-    add_definitions("-DBINARY_DIR=\"${SOURCE_DIR}/tests/binary\"")
-    add_definitions("-DJSON_DIR=\"${SOURCE_DIR}/tests/json\"")
-
-    set (BSON_TEST_SOURCES
-         ${SOURCE_DIR}/tests/TestSuite.c
-         ${SOURCE_DIR}/tests/TestSuite.h
-         ${SOURCE_DIR}/tests/test-libbson.c
-         ${SOURCE_DIR}/tests/test-atomic.c
-         ${SOURCE_DIR}/tests/test-bson.c
-         ${SOURCE_DIR}/tests/test-endian.c
-         ${SOURCE_DIR}/tests/test-clock.c
-         ${SOURCE_DIR}/tests/test-error.c
-         ${SOURCE_DIR}/tests/test-iso8601.c
-         ${SOURCE_DIR}/tests/test-iter.c
-         ${SOURCE_DIR}/tests/test-json.c
-         ${SOURCE_DIR}/tests/test-oid.c
-         ${SOURCE_DIR}/tests/test-reader.c
-         ${SOURCE_DIR}/tests/test-string.c
-         ${SOURCE_DIR}/tests/test-utf8.c
-         ${SOURCE_DIR}/tests/test-value.c
-         ${SOURCE_DIR}/tests/test-version.c
-         ${SOURCE_DIR}/tests/test-writer.c
-         ${SOURCE_DIR}/tests/test-bcon-basic.c
-         ${SOURCE_DIR}/tests/test-bcon-extract.c
-         ${SOURCE_DIR}/tests/json-test.c
-         ${SOURCE_DIR}/tests/json-test.c
-         ${SOURCE_DIR}/tests/json-test.h
+    list(APPEND BSON_TEST_SOURCES
+        tests/TestSuite.c
+        tests/TestSuite.h
+        tests/test-libbson.c
+        tests/test-atomic.c
+        tests/test-bson.c
+        tests/test-endian.c
+        tests/test-clock.c
+        tests/test-error.c
+        tests/test-iso8601.c
+        tests/test-iter.c
+        tests/test-json.c
+        tests/test-oid.c
+        tests/test-reader.c
+        tests/test-string.c
+        tests/test-utf8.c
+        tests/test-value.c
+        tests/test-version.c
+        tests/test-writer.c
+        tests/test-bcon-basic.c
+        tests/test-bcon-extract.c
+        tests/json-test.c
+        tests/json-test.c
+        tests/json-test.h
     )
 
-    if (ENABLE_EXPERIMENTAL_FEATURES)
-        set (BSON_TEST_SOURCES
-             ${BSON_TEST_SOURCES}
-             ${SOURCE_DIR}/tests/test-decimal128.c
-             ${SOURCE_DIR}/tests/test-type.c
-             ${SOURCE_DIR}/tests/json/type/decimal128/decimal128-1.json
-             ${SOURCE_DIR}/tests/json/type/decimal128/decimal128-2.json
-             ${SOURCE_DIR}/tests/json/type/decimal128/decimal128-3.json
-             ${SOURCE_DIR}/tests/json/type/decimal128/decimal128-4.json
-             ${SOURCE_DIR}/tests/json/type/decimal128/decimal128-5.json
-             ${SOURCE_DIR}/tests/json/type/decimal128/decimal128-6.json
-             ${SOURCE_DIR}/tests/json/type/decimal128/decimal128-7.json
-        )
-    endif ()
-
-    add_executable (test-libbson ${BSON_TEST_SOURCES})
-
-    target_link_libraries(test-libbson bson_static)
+    add_executable(test-libbson ${BSON_TEST_SOURCES})
+    target_link_libraries(test-libbson ${BSON_BUILT_LIBRARY})
+    target_compile_definitions(test-libbson
+        PRIVATE BINARY_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/binary\"
+        PRIVATE JSON_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/json\"
+    )
+    set_target_properties(test-libbson PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        POSITION_INDEPENDENT_CODE True
+    )
     add_test(NAME test-libbson COMMAND test-libbson)
-
-    file(COPY ${SOURCE_DIR}/tests/binary ${SOURCE_DIR}/tests/json
-         DESTINATION ${PROJECT_BINARY_DIR}/tests)
-endif ()  # ENABLE_TESTS
-
-install(
-  TARGETS bson_shared bson_static
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
-  RUNTIME DESTINATION bin
-)
-install(
-  FILES ${HEADERS}
-  DESTINATION "include/libbson-${BSON_API_VERSION}"
-)
-
-set(VERSION "${BSON_VERSION}")
-set(prefix "${CMAKE_INSTALL_PREFIX}")
-set(libdir "\${prefix}/lib")
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/libbson-1.0.pc.in
-    ${CMAKE_CURRENT_BINARY_DIR}/libbson-1.0.pc
-@ONLY)
-
-install(
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/libbson-1.0.pc
-    DESTINATION lib/pkgconfig
-)
+endif()
