@@ -283,6 +283,76 @@ endif()
 
 # Dependencies go here
 
+
+# Configure RPATH
+if(APPLE)
+    # OSX and IOS support RPATH
+    set(CMAKE_SKIP_BUILD_RPATH True)
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH True)
+
+    # Apple RPATH should use OSX "variables" for relative locations
+    # Debug and Release are explicitly stated here for Xcode configuration
+    # build
+    list(APPEND CMAKE_INSTALL_RPATH
+        @executable_path/lib/Debug
+        @executable_path/lib/Release
+        @executable_path/lib
+        @executable_path/../lib/Debug
+        @executable_path/../lib/Release
+        @executable_path/../lib
+        @loader_path/lib/Debug
+        @loader_path/lib/Release
+        @loader_path/lib
+        @loader_path/../lib/Debug
+        @loader_path/../lib/Release
+        @loader_path/../lib
+        $ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib
+        /usr/local/lib
+        /usr/lib
+        @executable_path/Frameworks/Debug
+        @executable_path/Frameworks/Release
+        @executable_path/Frameworks
+        @executable_path/../Frameworks/Debug
+        @executable_path/../Frameworks/Release
+        @executable_path/../Frameworks
+        @loader_path/Frameworks/Debug
+        @loader_path/Frameworks/Release
+        @loader_path/Frameworks
+        @loader_path/../Frameworks/Debug
+        @loader_path/../Frameworks/Release
+        @loader_path/../Frameworks
+        /Library/Frameworks
+        /System/Library/Frameworks
+        ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+        ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    )
+endif()
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+    # Most unix systems (but not android) support RPATH
+    set(CMAKE_SKIP_BUILD_RPATH True)
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH True)
+
+    # Use the $ORIGIN variable for relative locations
+    list(APPEND CMAKE_INSTALL_RPATH $ORIGIN)
+    if(CMAKE_LIBRARY_ARCHITECTURE)
+        list(APPEND CMAKE_INSTALL_RPATH
+            $ORIGIN/lib/${CMAKE_LIBRARY_ARCHITECTURE}
+            $ORIGIN/../lib/${CMAKE_LIBRARY_ARCHITECTURE}
+        )
+    endif()
+    list(APPEND CMAKE_INSTALL_RPATH
+        $ORIGIN/lib
+        $ORIGIN/../lib
+        $ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib
+        /usr/local/lib
+        /usr/lib
+        ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+        ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    )
+endif()
+
 # Install public headers to the output tree
 file(INSTALL ${BSON_HEADERS} DESTINATION ${CMAKE_INCLUDE_OUTPUT_DIRECTORY})
 
