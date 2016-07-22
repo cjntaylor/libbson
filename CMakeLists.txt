@@ -273,6 +273,16 @@ set(CMAKE_PACKAGE_OUTPUT_DIRECTORY
     ${CMAKE_OUTPUT_DIRECTORY}/${BSON_PACKAGE_INSTALL_PATH}
 )
 
+# Provide an uninstall target
+if(NOT TARGET uninstall)
+    add_custom_target(uninstall
+        COMMAND ${CMAKE_COMMAND}
+        ARGS -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake
+    )
+endif()
+
+# Dependencies go here
+
 # Install public headers to the output tree
 file(INSTALL ${BSON_HEADERS} DESTINATION ${CMAKE_INCLUDE_OUTPUT_DIRECTORY})
 
@@ -386,7 +396,7 @@ install(EXPORT ${PROJECT_NAME}
     FILE ${PROJECT_NAME}Config.cmake
 )
 
-# Provide an uninstall target
+# Configure uninstall target
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake
@@ -396,10 +406,6 @@ configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/uninstall_libbson.cmake.in
     ${CMAKE_OUTPUT_DIRECTORY}/uninstall/uninstall_libbson.cmake
     IMMEDIATE @ONLY
-)
-add_custom_target(uninstall
-    COMMAND ${CMAKE_COMMAND}
-    ARGS -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake
 )
 
 if(BSON_TESTS_ENABLED)
