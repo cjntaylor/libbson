@@ -16,6 +16,7 @@ set(BSON_VERSION
     ${BSON_MAJOR_VERSION}.${BSON_MINOR_VERSION}.${BSON_MICRO_VERSION}
 )
 set(BSON_VERSION_SOVER ${BSON_MAJOR_VERSION})
+set(BSON_VERSION_SEMVER ${BSON_MAJOR_VERSION}.0)
 
 option(BSON_TESTS_ENABLED "Enable testing" On)
 
@@ -227,9 +228,9 @@ list(APPEND BSON_DEFINES
 
 # Set the install path per platform
 if(WIN32)
-    # Use C:\Program Files\${PROJECT_NAME}\<version> under windows (since there
-    # isn't a common "lib" folder)
-    set(BSON_INSTALL_PATH ${PROJECT_NAME}/${BSON_VERSION})
+    # Use C:\Program Files\${PROJECT_NAME}\${BSON_VERSION_SEMVER} under
+    # windows (since there isn't a common "lib" folder)
+    set(BSON_INSTALL_PATH ${PROJECT_NAME}/${BSON_VERSION_SEMVER})
     set(BSON_LIBRARY_INSTALL_PATH ${BSON_INSTALL_PATH})
     set(BSON_RUNTIME_INSTALL_PATH ${BSON_INSTALL_PATH})
     set(BSON_INCLUDE_INSTALL_PATH ${BSON_INSTALL_PATH}/include)
@@ -243,8 +244,10 @@ else()
         )
     endif()
     set(BSON_RUNTIME_INSTALL_PATH bin)
-    set(BSON_INCLUDE_INSTALL_PATH include/${PROJECT_NAME}-${BSON_VERSION})
-    set(BSON_PACKAGE_INSTALL_PATH 
+    set(BSON_INCLUDE_INSTALL_PATH
+        include/${PROJECT_NAME}-${BSON_VERSION_SEMVER}
+    )
+    set(BSON_PACKAGE_INSTALL_PATH
         ${BSON_LIBRARY_INSTALL_PATH}/cmake/${PROJECT_NAME}
     )
 endif()
